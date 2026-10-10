@@ -12,5 +12,5 @@ SCHEMA_VERSION = 'analysis-v1.0'
 DEFAULT_MODEL = 'gpt-4.1-mini-2025-04-14'
 
 def ensure_directories():
-    for folder in ('sources', 'exports', 'replays', 'evaluation'):
+    for folder in ('sources', 'exports', 'replays', 'evaluation', 'previews'):
         (DATA_DIR / folder).mkdir(parents=True, exist_ok=True)

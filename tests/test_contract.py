@@ -184,6 +184,14 @@ def test_api_search_contract_and_cross_origin_protection(client):
     assert client.post('/api/v1/exports',json={'cohort':Cohort().model_dump()},headers={'origin':'https://untrusted.example'}).status_code==403
     assert client.get('/api/v1/evidence?q=%22%20OR%20%2A').status_code==200
 
+def test_pdf_page_preview_is_local_and_exactly_addressed(client,session):
+    source=session.scalar(select(Source).where(Source.filename=='G60_OptionList.PDF'))
+    response=client.get(f'/api/v1/sources/{source.id}/pages/4')
+    assert response.status_code==200 and response.headers['content-type']=='image/png'
+    assert response.content.startswith(b'\x89PNG\r\n\x1a\n')
+    assert client.get(f'/api/v1/sources/{source.id}/pages/0').status_code==422
+    assert client.get(f'/api/v1/sources/{source.id}/pages/999').status_code==404
+
 def test_scenario_requires_reviewed_compatible_bmw_fact(session):
     from backend.comparisons import comparison
     result=comparison(session)

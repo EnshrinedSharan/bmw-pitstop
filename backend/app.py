@@ -2,6 +2,7 @@ import os
 import re
 from pathlib import Path
 from contextlib import asynccontextmanager
+from threading import Lock
 from typing import Annotated, Literal
 from fastapi import FastAPI, Depends, Query, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -41,6 +42,7 @@ def cohort_parameters(model:Literal['F70','G60','G68','G70','G60_G68']='G60',cou
     return Cohort(model=model,country=country,powertrain=powertrain,origin=origin)
 
 COHORT=Annotated[Cohort,Depends(cohort_parameters)]
+pdf_render_lock=Lock()
 
 def row_dict(record):
     return {c.name:getattr(record,c.name) for c in record.__table__.columns}
@@ -94,6 +96,27 @@ def source_file(source_id:str,db:DB):
     source=db.get(Source,source_id)
     if not source: raise HTTPException(404,'Source not found.')
     return FileResponse(source.path,media_type='application/pdf' if source.format=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',filename=source.filename,content_disposition_type='inline')
+
+@app.get('/api/v1/sources/{source_id}/pages/{page_number}')
+def source_page(source_id:str,page_number:int,db:DB):
+    source=db.get(Source,source_id)
+    if not source or source.format!='pdf':raise HTTPException(404,'PDF source not found.')
+    if page_number<1:raise HTTPException(422,'PDF pages start at one.')
+    cache=DATA_DIR/'previews'/f'{source.checksum}-p{page_number}-v1.png'
+    # PDFium calls must be serialized; the local API can use multiple request threads.
+    with pdf_render_lock:
+        if not cache.exists():
+            import pypdfium2 as pdfium
+            from uuid import uuid4
+            with pdfium.PdfDocument(source.path) as document:
+                if page_number>len(document):raise HTTPException(404,'PDF page not found.')
+                page=document[page_number-1]
+                bitmap=page.render(scale=1.6)
+                temp=cache.with_suffix('.'+uuid4().hex+'.tmp')
+                bitmap.to_pil().save(temp,format='PNG')
+                bitmap.close();page.close()
+                temp.replace(cache)
+    return FileResponse(cache,media_type='image/png',headers={'Cache-Control':'private, max-age=86400'})
 
 @app.get('/api/v1/evidence')
 def evidence_search(db:DB,q:str='',model:str|None=None,source_id:str|None=None,kind:str|None=None,offset:int=Query(0,ge=0),limit:int=Query(30,ge=1,le=100)):
