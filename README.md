@@ -49,7 +49,7 @@ The web **Import sources** action also accepts the archive's full local path. Un
 
 The default G60 / US / all-powertrain cohort contains **3,610** eligible records. The remaining model records are available through the cohort filters. A feedback ID is a record, not a verified unique person. Original tags and spreadsheet rows are retained. Identical text with different IDs is flagged but not merged.
 
-The Evidence library is a source explorer: it uses the selected model and shows all supplied source markets and powertrains, with this scope stated above its records. Overview, Requirements and decision exports use the full selected feedback cohort. Catalog pages have a local PNG preview as well as the retained original PDF link.
+The Evidence library is a source explorer: it uses the selected model, or an explicitly selected source file, and shows all supplied source markets and powertrains, with this scope stated above its records. Overview, Requirements and decision exports use the full selected feedback cohort. Catalog pages have a local PNG preview as well as the retained original PDF link.
 
 The three German equipment PDFs retain every page and 1,108 structured extraction candidates, including specifications, prices and option availability. These candidates **require review** against the original page. All page text is searchable even where a table cannot be safely normalized. Unknown cells remain unknown; this is a reviewable import, not a claim of complete verified equipment coverage. Prices preserve German VAT and package conditions. German equipment cannot establish US availability.
 

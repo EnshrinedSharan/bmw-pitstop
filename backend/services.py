@@ -79,7 +79,7 @@ def ranking(session, cohort: Cohort, category=None):
             if a.sentiment is not None: sentiment_by_record[f.id].append(a.sentiment)
         means=[sum(s)/len(s) for s in sentiment_by_record.values()]
         conflicts=[]
-        if likes: conflicts.append(f'{len(likes)} records also praise this feature. Positive and unmet-need counts may overlap.')
+        if likes: conflicts.append(f'Strength to preserve: {len(likes)} records praise this feature. Positive and unmet-need counts may overlap.')
         if any(f.duplicate_text for _,f in unmet): conflicts.append('Identical wording occurs under different source IDs; these records have not been merged.')
         output.append(RequirementView(id=req.id,feature_id=feature.id,feature=feature.name,category=feature.category,
           title=revision.title,description=revision.description,acceptance_criteria=revision.acceptance_criteria,revision=req.current_revision,
