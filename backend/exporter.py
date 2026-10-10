@@ -107,8 +107,9 @@ def build_deck(snapshot, path):
     if snapshot.get('scenario'):
         scenario=snapshot['scenario']
         s=slide_base(prs,'Appendix: synthetic competitor scenario','DE / BEV sedan assumptions. Mercedes and BYD entries are fictional.')
-        table(s,['Feature','BMW baseline','Mercedes scenario','BYD scenario'],[[r['label'],str(r['bmw']) if r['bmw'] is not None else 'Not comparable',str(r['mercedes']),str(r['byd'])] for r in scenario['rows']],widths=[3.6,2.8,2.8,2.8])
-        text_box(s,.65,5.8,12,.9,'Synthetic values establish no actual competitor specifications, customer demand or ROI.\nGenerator: authored demonstration fixture v1. Input: G60 catalog, July 2026, page 4.',16,GRAY)
+        table(s,['Feature / unit','BMW baseline','Mercedes scenario','BYD scenario'],[[f"{r['label']} ({r['unit']})",str(r['bmw']) if r['bmw'] is not None else 'Not comparable',str(r['mercedes']),str(r['byd'])] for r in scenario['rows']],widths=[3.6,2.8,2.8,2.8])
+        text_box(s,.65,5.8,12,.9,'Price assumptions include 19% German VAT and exclude delivery.\nSynthetic values establish no actual competitor specifications, demand or ROI.',16,GRAY)
+        s.notes_slide.notes_text_frame.text='Generator: authored demonstration fixture v1. Input: G60 catalog, July 2026, page 4.\n'+str(scenario)
     lines=[f'{name}: SHA-256 {checksum[:16]}…' for name,checksum in snapshot['source_register'].items()]
     for start in range(0,len(lines),4):
         s=slide_base(prs,'Snapshot and source register',f'Sources {start+1}–{min(start+4,len(lines))} of {len(lines)}')
