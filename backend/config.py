@@ -7,7 +7,7 @@ DB_URL = os.getenv('BMWPM_DATABASE_URL', f"sqlite:///{(DATA_DIR / 'cockpit.sqlit
 PIPELINE_VERSION = 'evidence-v1.0'
 MAPPING_VERSION = 'taxonomy-v2-tags-1.0'
 RANKING_VERSION = 'demand-v1.0'
-PROMPT_VERSION = 'requirements-v1.0'
+PROMPT_VERSION = 'requirements-v1.1'
 SCHEMA_VERSION = 'analysis-v1.0'
 DEFAULT_MODEL = 'gpt-4.1-mini-2025-04-14'
 

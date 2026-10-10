@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "serve": "node scripts/dev.mjs --production",
     "web": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 127.0.0.1",
