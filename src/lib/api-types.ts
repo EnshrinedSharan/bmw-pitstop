@@ -293,6 +293,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connectors/web": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Connect Web */
+        post: operations["connect_web_api_v1_connectors_web_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analysis": {
         parameters: {
             query?: never;
@@ -803,6 +820,30 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** WebConnectorRequest */
+        WebConnectorRequest: {
+            /** Urls */
+            urls: string[];
+            /**
+             * Model
+             * @default G60
+             * @enum {string}
+             */
+            model: "F70" | "G60" | "G68" | "G70" | "G60_G68";
+            /**
+             * Country
+             * @default US
+             */
+            country: string;
+            /**
+             * Powertrain
+             * @default unknown
+             * @enum {string}
+             */
+            powertrain: "ICE" | "BEV" | "PHEV" | "unknown";
+            /** Source Label */
+            source_label?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -1082,6 +1123,7 @@ export interface operations {
                 model?: string | null;
                 source_id?: string | null;
                 kind?: string | null;
+                origin?: "unknown" | "observed" | "synthetic" | "all";
                 offset?: number;
                 limit?: number;
             };
@@ -1313,6 +1355,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_web_api_v1_connectors_web_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebConnectorRequest"];
             };
         };
         responses: {

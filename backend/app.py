@@ -12,7 +12,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session
 from .db import session_dependency
 from .models import (Source,EvidenceRef,Feedback,Aspect,Feature,Fact,Vehicle,Requirement,RequirementRevision,Decision,AuditEvent,Job,Export,EvaluationLabel,AnalysisRun,now)
-from .schemas import (Cohort,RankingResponse,DecisionRequest,ImportRequest,JobView,AnalysisRequest,AnalysisProposal,ExportRequest,MappingReviewRequest,FactReviewRequest,EvaluationRequest)
+from .schemas import (Cohort,RankingResponse,DecisionRequest,ImportRequest,JobView,AnalysisRequest,AnalysisProposal,ExportRequest,MappingReviewRequest,FactReviewRequest,EvaluationRequest,WebConnectorRequest)
 from .services import ranking,detail,decide,evidence_detail,evaluation_metrics
 from .taxonomy import CATEGORIES
 from .audit import append_event,verify_audit
@@ -61,7 +61,7 @@ def metadata(db:DB):
 @app.get('/api/v1/overview')
 def overview(db:DB,cohort:COHORT):
     result=ranking(db,cohort)
-    sources=db.scalars(select(Source)).all()
+    sources=db.scalars(select(Source).where(Source.active==True)).all()
     return {'cohort':cohort.model_dump(),'denominator':result.denominator,'mapped_records':result.mapped_records,'reviewed_mapping_records':result.reviewed_mapping_records,
             'mapping_coverage':result.mapping_coverage,'requirements':len(result.requirements),'critical':sum(r.critical for r in result.requirements),
             'approved':sum(r.status=='approved' for r in result.requirements),'sources':len(sources),'tagged_rows':sum(s.row_count for s in sources if s.kind=='customer_statement'),
@@ -89,13 +89,14 @@ def requirement_decision(requirement_id:str,request:DecisionRequest,db:DB):
 
 @app.get('/api/v1/sources')
 def sources(db:DB):
-    return [{k:v for k,v in row_dict(s).items() if k!='path'} for s in db.scalars(select(Source).order_by(Source.filename))]
+    return [{k:v for k,v in row_dict(s).items() if k!='path'} for s in db.scalars(select(Source).where(Source.active==True).order_by(Source.filename))]
 
 @app.get('/api/v1/sources/{source_id}/file')
 def source_file(source_id:str,db:DB):
     source=db.get(Source,source_id)
     if not source: raise HTTPException(404,'Source not found.')
-    return FileResponse(source.path,media_type='application/pdf' if source.format=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',filename=source.filename,content_disposition_type='inline')
+    media={'pdf':'application/pdf','html':'text/html'}.get(source.format,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return FileResponse(source.path,media_type=media,filename=source.filename,content_disposition_type='inline')
 
 @app.get('/api/v1/sources/{source_id}/pages/{page_number}')
 def source_page(source_id:str,page_number:int,db:DB):
@@ -119,7 +120,7 @@ def source_page(source_id:str,page_number:int,db:DB):
     return FileResponse(cache,media_type='image/png',headers={'Cache-Control':'private, max-age=86400'})
 
 @app.get('/api/v1/evidence')
-def evidence_search(db:DB,q:str='',model:str|None=None,source_id:str|None=None,kind:str|None=None,offset:int=Query(0,ge=0),limit:int=Query(30,ge=1,le=100)):
+def evidence_search(db:DB,q:str='',model:str|None=None,source_id:str|None=None,kind:str|None=None,origin:Literal['unknown','observed','synthetic','all']='all',offset:int=Query(0,ge=0),limit:int=Query(30,ge=1,le=100)):
     query=select(EvidenceRef,Source.filename).join(Source,EvidenceRef.source_id==Source.id)
     if q.strip():
         tokens=re.findall(r'\w+',q,flags=re.UNICODE)[:12]
@@ -130,7 +131,9 @@ def evidence_search(db:DB,q:str='',model:str|None=None,source_id:str|None=None,k
         query=query.where(EvidenceRef.id.in_(matched))
     if model: query=query.where(EvidenceRef.model==model)
     if source_id: query=query.where(EvidenceRef.source_id==source_id)
+    else: query=query.where(Source.active==True)
     if kind: query=query.where(EvidenceRef.kind==kind)
+    if origin!='all': query=query.where(EvidenceRef.origin==origin)
     total=db.scalar(select(func.count()).select_from(query.subquery()))
     rows=db.execute(query.order_by(EvidenceRef.id).offset(offset).limit(limit)).all()
     return {'items':[row_dict(e)|{'filename':filename} for e,filename in rows],'total':total}
@@ -192,6 +195,10 @@ def import_sources(request:ImportRequest,db:DB):
     path=Path(request.path).resolve()
     if not path.is_file() or path.suffix.lower()!='.zip': raise HTTPException(422,'Provide an existing local BMW source ZIP file.')
     return enqueue(db,'import',{'path':str(path)})
+
+@app.post('/api/v1/connectors/web',response_model=JobView)
+def connect_web(request:WebConnectorRequest,db:DB):
+    return enqueue(db,'web_connector',request.model_dump())
 
 @app.post('/api/v1/analysis',response_model=JobView)
 def start_analysis(request:AnalysisRequest,db:DB):

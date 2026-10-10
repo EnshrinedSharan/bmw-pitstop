@@ -51,6 +51,12 @@ The default G60 / US / all-powertrain cohort contains **3,610** eligible records
 
 The Evidence library is a source explorer: it uses the selected model, or an explicitly selected source file, and shows all supplied source markets and powertrains, with this scope stated above its records. Overview, Requirements and decision exports use the full selected feedback cohort. Catalog pages have a local PNG preview as well as the retained original PDF link.
 
+## Web evidence connectors
+
+**Connect web evidence** imports seeded public webpages or forum threads. The connector fetches only the URLs entered by the PM, checks `robots.txt`, saves the exact static HTML snapshot, extracts readable qualitative text blocks, and stores them as observed evidence with URL, retrieval metadata, checksum and block location. It does not crawl links, log in, use cookies, render JavaScript, or access private/local network addresses.
+
+Scraped evidence is labeled **Observed web evidence**. It appears in Evidence and Mapping Review first. The default dashboard remains governed by the supplied hackathon data (`origin=unknown`); web evidence contributes to requirements and demand only when the Evidence origin filter is changed to **Observed** or **All**. Web-derived feature mappings are lightweight keyword suggestions and require PM review.
+
 The three German equipment PDFs retain every page and 1,108 structured extraction candidates, including specifications, prices and option availability. These candidates **require review** against the original page. All page text is searchable even where a table cannot be safely normalized. Unknown cells remain unknown; this is a reviewable import, not a claim of complete verified equipment coverage. Prices preserve German VAT and package conditions. German equipment cannot establish US availability.
 
 Study means (185 values) and rating distributions (1,442 values) use separate instruments. Their sample sizes and cross-instrument conversions remain unknown. The 36 sales observations retain their supplied aggregation, including combined G60/G68 totals and explicitly unverified future 2030 values.
@@ -118,6 +124,7 @@ Evidence library → Human evaluation contains 100 stratified, text-deduplicated
 - `backend/ingestion.py`: checksum-based adapters, source retention, spreadsheet deduplication and PDF geometry extraction.
 - `backend/taxonomy.py`: versioned C01–C10 tag dictionary and review flags.
 - `backend/services.py`: cohort demand, requirement revisions and atomic decisions.
+- `backend/connectors.py`: seeded public web connector, static HTML snapshots, robots checks and observed qualitative evidence import.
 - `backend/analysis.py`: structured Responses API, quote/reference validation and exact-input replay.
 - `backend/jobs.py`: one persisted queue with one worker. Restarted unfinished jobs become Interrupted and require an explicit retry.
 - `backend/exporter.py`: editable python-pptx decks from frozen snapshots.
@@ -128,4 +135,4 @@ Evidence library → Human evaluation contains 100 stratified, text-deduplicated
 
 API documentation: http://127.0.0.1:8000/docs. All application endpoints are under `/api/v1`. `BMWPM_DATA_DIR` selects another local data folder; `BMWPM_DATABASE_URL` overrides the SQLite URL. Back up the database using SQLite's backup facility while running, or copy the complete data directory after stopping the app. Original source paths are absolute; moving the workspace requires reimporting sources into a fresh database or updating paths through a deliberate migration.
 
-Live connectors, comprehensive reviewed PDF normalization, calibrated automatic mapping, authenticated sharing, PostgreSQL and production operations remain future work.
+Broad crawlers, JavaScript-rendered evidence capture, comprehensive reviewed PDF normalization, calibrated automatic mapping, authenticated sharing, PostgreSQL and production operations remain future work.

@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import select
 from .db import SessionLocal
 from .models import Job, now
-from .schemas import AnalysisRequest, ExportRequest
+from .schemas import AnalysisRequest, ExportRequest, WebConnectorRequest
 
 executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix='bmw-worker')
 progress_messages={}
@@ -39,6 +39,12 @@ def execute(job_id):
                 from .exporter import export_deck
                 progress_messages[job_id]='Freezing decisions and generating the deck'
                 result=export_deck(s,ExportRequest.model_validate(payload))
+            elif kind=='web_connector':
+                from .connectors import import_web
+                from .services import seed_requirements
+                progress_messages[job_id]='Fetching seeded web evidence'
+                result=import_web(s,WebConnectorRequest.model_validate(payload),lambda message:progress_messages.update({job_id:message}))
+                seed_requirements(s)
             else: raise ValueError('Unknown job type.')
             job=s.get(Job,job_id);job.result=result;job.state='succeeded';job.progress='Complete';job.updated_at=now();s.commit()
     except Exception as exc:

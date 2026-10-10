@@ -1,22 +1,26 @@
 import json
 import os
 import sqlite3
+import socket
 import subprocess
 import sys
 from pathlib import Path
 from copy import deepcopy
 import pytest
+import httpx
 from sqlalchemy import select,func,text
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from pptx import Presentation
 from backend.models import Source,Feedback,Aspect,Feature,Fact,EvidenceRef,RequirementRevision,Decision,AuditEvent,Job,Export,EvaluationLabel,AnalysisRun
 from backend.schemas import Cohort,DecisionRequest,AnalysisRequest,ExportRequest
-from backend.services import ranking,decide,detail,evaluation_metrics
+from backend.services import ranking,decide,detail,evaluation_metrics,seed_requirements
 from backend.analysis import prepare_input,validate_output,analyze
 from backend.audit import verify_audit,digest
 from backend.db import SessionLocal
 from backend.config import ROOT,DATA_DIR
+from backend.connectors import import_web, normalize_url
+from backend.schemas import WebConnectorRequest
 
 def target(session):
     return next(r for r in ranking(session,Cohort()).requirements if r.feature=='Touch screen, operation')
@@ -183,6 +187,62 @@ def test_api_search_contract_and_cross_origin_protection(client):
     assert client.get('/api/v1/requirements?model=G60&country=US&category=C07').json()['denominator']==3610
     assert client.post('/api/v1/exports',json={'cohort':Cohort().model_dump()},headers={'origin':'https://untrusted.example'}).status_code==403
     assert client.get('/api/v1/evidence?q=%22%20OR%20%2A').status_code==200
+
+def web_client_factory(pages):
+    def handler(request):
+        if request.url.path == '/robots.txt':
+            body = pages.get('robots', 'User-agent: *\nAllow: /\n')
+            return httpx.Response(200, text=body)
+        page = pages.get(str(request.url))
+        if isinstance(page, Exception):
+            raise page
+        if page is None:
+            return httpx.Response(404, text='missing')
+        body, content_type = page
+        return httpx.Response(200, content=body.encode(), headers={'content-type': content_type, 'last-modified': 'Sat, 10 Oct 2026 12:00:00 GMT'})
+    return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+def test_seeded_web_connector_imports_observed_review_evidence(session,monkeypatch):
+    monkeypatch.setattr('backend.connectors.socket.getaddrinfo',lambda host,port:[(socket.AF_INET,socket.SOCK_STREAM,6,'',( '93.184.216.34',0))])
+    html='<html><body><article><p>The BMW iDrive touchscreen is difficult to use while driving. I want clearer climate shortcuts because the screen menus take too much attention on every trip.</p><blockquote>I love the display quality, but the touch screen operation needs fewer layers for common controls.</blockquote></article></body></html>'
+    request=WebConnectorRequest(urls=['https://owners.example/forum/g60-touchscreen'],model='G60',country='US',powertrain='BEV',source_label='Owner forum')
+    result=import_web(session,request,client=web_client_factory({'https://owners.example/forum/g60-touchscreen':(html,'text/html')}))
+    seed_requirements(session);session.commit()
+    assert result['imported'][0]['records']>=2
+    source=session.scalar(select(Source).where(Source.format=='html',Source.edition=='https://owners.example/forum/g60-touchscreen'))
+    assert source and source.origin=='observed' and source.active
+    assert Path(source.path).exists() and source.checksum
+    refs=session.scalars(select(EvidenceRef).where(EvidenceRef.source_id==source.id)).all()
+    assert len(refs)>=2 and refs[0].locator['extraction_method']=='static-html-text-block-v1'
+    record=session.scalar(select(Feedback).where(Feedback.source_id==source.id))
+    assert record.origin=='observed' and record.source_label=='Owner forum'
+    assert session.scalar(select(Aspect).join(Feedback,Aspect.feedback_id==Feedback.id).where(Feedback.source_id==source.id,Aspect.mapping_status=='suggested'))
+    assert ranking(session,Cohort()).denominator==3610
+    observed=ranking(session,Cohort(origin='observed',powertrain='BEV'))
+    assert observed.denominator==source.record_count and any(r.numerator for r in observed.requirements)
+    matched=session.execute(text('SELECT evidence_id FROM evidence_fts WHERE evidence_fts MATCH :query'),{'query':'touchscreen'}).scalars().all()
+    assert any(ref.id in matched for ref in refs)
+
+def test_web_connector_reimport_versions_and_failures(session,monkeypatch):
+    monkeypatch.setattr('backend.connectors.socket.getaddrinfo',lambda host,port:[(socket.AF_INET,socket.SOCK_STREAM,6,'',( '93.184.216.34',0))])
+    url='https://owners.example/forum/g60-range'
+    first='<p>The charging route planner is difficult to use and I want clearer battery preconditioning status during long trips.</p>'
+    second='<p>The charging route planner is still difficult to use, and the battery preconditioning status should be much easier to find before fast charging.</p>'
+    request=WebConnectorRequest(urls=[url],model='G60',country='US')
+    import_web(session,request,client=web_client_factory({url:(first,'text/html')}));session.commit()
+    old=session.scalar(select(Source).where(Source.edition==url,Source.active==True))
+    skipped=import_web(session,request,client=web_client_factory({url:(first,'text/html')}));session.commit()
+    assert skipped['skipped'] and session.get(Source,old.id).active
+    import_web(session,request,client=web_client_factory({url:(second,'text/html')}));session.commit()
+    assert session.get(Source,old.id).active is False
+    assert session.scalar(select(func.count()).select_from(Source).where(Source.edition==url,Source.active==True))==1
+    blocked=web_client_factory({'robots':'User-agent: *\nDisallow: /\n',url:(second,'text/html')})
+    with pytest.raises(ValueError,match='did not import any pages'):
+        import_web(session,request,client=blocked)
+    with pytest.raises(ValueError):
+        normalize_url('http://127.0.0.1/private')
+    bad=import_web(session,WebConnectorRequest(urls=[url,'https://owners.example/file.pdf']),client=web_client_factory({url:(second,'text/html'),'https://owners.example/file.pdf':('%PDF-1.7','application/pdf')}))
+    assert bad['skipped'] and bad['failed'][0]['error'].startswith('Unsupported content type')
 
 def test_pdf_page_preview_is_local_and_exactly_addressed(client,session):
     source=session.scalar(select(Source).where(Source.filename=='G60_OptionList.PDF'))

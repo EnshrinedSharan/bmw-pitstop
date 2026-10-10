@@ -6,8 +6,25 @@ test('offline evidence inspection, saved replay, editing, approval, and frozen d
  // Deny every non-loopback browser request for the entire rehearsal.
  const externalRequests:string[]=[];
  await page.route('**/*',route=>{const u=new URL(route.request().url());if(['127.0.0.1','localhost'].includes(u.hostname))return route.continue();externalRequests.push(u.origin);return route.abort();});
+ let webConnected=false;
+ await page.route('**/api/v1/connectors/web',async route=>{
+  const payload=route.request().postDataJSON() as {urls:string[]};
+  expect(payload.urls).toContain('https://example.com/forum/g60-touchscreen');
+  webConnected=true;
+  await route.fulfill({json:{id:'web-e2e',kind:'web_connector',state:'succeeded',input:payload,result:{imported:[{url:payload.urls[0],records:1}],skipped:[],failed:[]},error:null,progress:'Complete',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}});
+ });
  await page.goto('/');
  await expect(page.getByText('3,610',{exact:true}).first()).toBeVisible();
+ await page.getByRole('button',{name:'Connect web evidence',exact:true}).click();
+ const connector=page.getByRole('dialog',{name:'Connect web evidence',exact:true});
+ await connector.getByLabel('Seed URLs').fill('https://example.com/forum/g60-touchscreen');
+ await connector.getByLabel('Model').selectOption('G60');
+ await connector.getByLabel('Market').fill('US');
+ await connector.getByLabel('Powertrain').selectOption('unknown');
+ await connector.getByLabel('Source label').fill('Mock owner forum');
+ await connector.getByRole('button',{name:'Connect evidence',exact:true}).click();
+ await expect(page.getByText('Web evidence connected.',{exact:true})).toBeVisible();
+ expect(webConnected).toBe(true);
  await page.getByRole('button',{name:'Requirements',exact:true}).click();
  await page.getByLabel('Search requirements').fill('Touch screen, operation');
  await page.getByRole('button',{name:'Touch screen, operation',exact:true}).click();

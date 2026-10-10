@@ -58,6 +58,13 @@ class DecisionRequest(BaseModel):
 class ImportRequest(BaseModel):
     path: str
 
+class WebConnectorRequest(BaseModel):
+    urls: list[str] = Field(min_length=1, max_length=10)
+    model: Literal['F70','G60','G68','G70','G60_G68'] = 'G60'
+    country: str = Field(default='US', min_length=1, max_length=40)
+    powertrain: Literal['ICE','BEV','PHEV','unknown'] = 'unknown'
+    source_label: str | None = Field(default=None, max_length=120)
+
 class JobView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str

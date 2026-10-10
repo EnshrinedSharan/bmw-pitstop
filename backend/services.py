@@ -151,6 +151,8 @@ def evidence_detail(session, evidence_id):
     if not item: raise HTTPException(404,'Evidence not found.')
     source=session.get(Source,item.source_id)
     feedback=session.scalar(select(Feedback).where(Feedback.source_id==source.id,Feedback.external_id==item.locator.get('external_id','')))
+    if not feedback:
+        feedback=session.scalar(select(Feedback).join(Aspect,Aspect.feedback_id==Feedback.id).where(Aspect.evidence_id==item.id))
     aspects=session.scalars(select(Aspect).where(Aspect.feedback_id==feedback.id)).all() if feedback else []
     return {'id':item.id,'text':item.text,'locator':item.locator,'kind':item.kind,'origin':item.origin,'model':item.model,
             'source':{'id':source.id,'filename':source.filename,'checksum':source.checksum,'market':source.market,'edition':source.edition,'date':source.source_date,'format':source.format},
