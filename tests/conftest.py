@@ -1,12 +1,13 @@
 """Integration checks use a disposable SQLite backup, never the reviewer's database."""
 import os
 import sqlite3
+import uuid
 from pathlib import Path
 import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
 SEED=Path(os.getenv('BMWPM_TEST_SEED',str(ROOT/'.local'/'cockpit.sqlite'))).resolve()
-TEST_DIR=ROOT/'.local'/'test-run'
+TEST_DIR=ROOT/'.local'/'test-runs'/uuid.uuid4().hex
 TEST_DIR.mkdir(parents=True,exist_ok=True)
 os.environ['BMWPM_DATA_DIR']=str(TEST_DIR)
 os.environ['BMWPM_DATABASE_URL']='sqlite:///'+(TEST_DIR/'cockpit.sqlite').as_posix()
