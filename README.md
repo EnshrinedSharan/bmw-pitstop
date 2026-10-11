@@ -1,6 +1,34 @@
 # BMW Product Manager Cockpit
 
-A local G60-led hackathon application for exploring supplied evidence, reviewing customer requirements, recording PM decisions and exporting an executive PowerPoint. F70 and G70 are imported alongside G60. The English interface has five views: Overview, Requirements, Evidence library, Comparisons, and Decisions & audit.
+## Application Trial — combined local website
+
+## Portable Windows package
+
+The Windows x64 ZIP includes a native `Start BMW.exe` launcher, bundled Python dependencies, a prebuilt dashboard and a database/document snapshot. Extract the entire ZIP, then double-click the launcher. See [Windows instructions](docs/WINDOWS_PORTABLE.md).
+
+## Handover panels
+
+The sidebar also includes **Successor brief**, **USPs & cost**, and **Market trends** from `bmw-handover.zip`. Their FastAPI routes are `/api/v1/successor`, `/api/v1/usp`, and `/api/v1/trends`; Keep and Lead proposal reviews use `/api/v1/successor/{id}/review` and the existing audit trail. The trends register is `fixtures/market-trends.json`. Cost is an adjustable estimate, and trend summaries remain pending source review. The RAG engine from `bmw-pm-project-reviews-and-RAG` is now integrated alongside these panels. The existing Problems, 3D model, merged view, evidence, comparison, decision, and Lovable-styled interface remain available.
+
+
+This editable copy has eleven sidebar tabs. Start with `npm run dev` and open **http://127.0.0.1:3001** (API: **8001**). The current local instance uses **3002/8002** via `BMWPM_WEB_PORT=3002 BMWPM_API_PORT=8002 npm run dev` to avoid the backup's ports. Problems shows detailed needs, original source citations and scores. **Merge tabs** connects it side by side with the hosted BMW G60 model; the selection and filters persist between the two views. The model itself receives red part highlights, transparency, screen/vent surface concepts and seat upholstery previews through Sketchfab's supported API. Approved presets persist with PM decisions. Live AI part identification is authorized, enabled by default and has a visible local fallback. Document intelligence and Reviews & Comments now integrate the supplied RAG and Reddit pipeline. See [the integration notes](docs/RAG_INTEGRATION.md) and [the model notes](docs/G60_3D.md). The connected HTML Studio remains at `/studio.html`, and the original prototype remains at `/legacy/BMW_Product_Decision_Prototype.html`.
+
+For a fresh Linux checkout (Node.js 20.9+ and Python required):
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+corepack pnpm@10 install --frozen-lockfile
+.venv/bin/python -m backend.cli migrate
+.venv/bin/python -m backend.cli import-files G60_OptionList.PDF BMW_G60_Scopes_and_Data.pdf '261010_BMW_Product_Management_Key_Note(1).pptx' G60_feedback_hackathon.xlsx
+npm run dev
+```
+
+See [EDITING.md](EDITING.md) for the source-file map. Dependencies, local database decisions, exports and credentials are excluded from Git; the supplied source documents are included so a fresh clone can import the G60 data. Python 3.14 is used by this local copy; the original project was tested with Python 3.12.
+
+The notes below describe the original full dataset. This copy contains the G60 subset, and its launcher uses ports 3001/8001 instead of 3000/8000.
+
+A local G60-led hackathon application for exploring supplied evidence, reviewing customer requirements, recording PM decisions and exporting an executive PowerPoint. F70 and G70 are imported alongside G60. The interface includes Overview, Problems, 3D model, Successor brief, USPs & cost, Market trends, Evidence library, Document intelligence, Reviews & Comments, Comparisons, and Decisions & audit.
 
 ## Run the prepared workspace
 
@@ -39,6 +67,14 @@ On macOS/Linux, create the environment with `python3.12 -m venv .venv` and use `
 The web **Import sources** action also accepts the archive's full local path. Unchanged checksums are skipped. An altered file with an existing filename is rejected rather than silently replacing evidence; handling a new source edition requires an explicit import migration.
 
 ## Demo behavior and data boundaries
+
+For the individual G60 files supplied with this workspace, import them directly:
+
+```bash
+.venv/bin/python -m backend.cli import-files G60_OptionList.PDF BMW_G60_Scopes_and_Data.pdf '261010_BMW_Product_Management_Key_Note(1).pptx' G60_feedback_hackathon.xlsx
+```
+
+This subset populates G60 feedback and equipment. The scopes PDF and keynote slide text appear as searchable Project references in the Evidence library; they do not count as customer feedback or verified equipment facts. Original documents are retained. Reimporting identical files skips them. Other model feedback, sales and customer studies require their corresponding source files.
 
 | Imported feedback | Tagged spreadsheet rows | Distinct source-scoped IDs |
 |---|---:|---:|

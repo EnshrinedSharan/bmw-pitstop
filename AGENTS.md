@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## GitHub delivery
+
+The user requested that this editable application be maintained in the GitHub repository `application_trial`. After each completed change, run relevant checks, commit the changed source files, and push to the configured origin. Preserve all frontend and backend source. Do not commit secrets, virtual environments, installed dependencies, runtime databases, or test output. If authentication or network access blocks a push, retain the local commit and report the blocker.

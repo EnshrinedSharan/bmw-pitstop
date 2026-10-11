@@ -54,7 +54,7 @@ def ranking(session, cohort: Cohort, category=None):
         if decision.snapshot.get('cohort')==cohort.model_dump():
             state[decision.requirement_id]=decision
     output=[]
-    refs={}
+    sources={source.id:source for source in session.scalars(select(Source))}
     for req in requirements:
         items=groups.get(req.feature_id,[])
         if not items: continue
@@ -70,7 +70,8 @@ def ranking(session, cohort: Cohort, category=None):
             if len(samples)>=3: break
             if any(s['feedback_id']==f.id for s in samples): continue
             ref=session.get(EvidenceRef,a.evidence_id)
-            samples.append({'id':ref.id,'feedback_id':f.id,'external_id':f.external_id,'quote':a.quote,'country':f.country,'type':a.feedback_type,'locator':ref.locator})
+            source=sources.get(ref.source_id)
+            samples.append({'source':{'id':source.id,'filename':source.filename,'kind':source.kind} if source else None,'id':ref.id,'feedback_id':f.id,'external_id':f.external_id,'quote':a.quote,'country':f.country,'type':a.feedback_type,'locator':ref.locator})
         revision=revisions[req.id]
         decision=state.get(req.id)
         current=decision.current if decision and decision.revision==req.current_revision else {'status':'proposed','band':'Unscored'}
@@ -83,6 +84,7 @@ def ranking(session, cohort: Cohort, category=None):
         if any(f.duplicate_text for _,f in unmet): conflicts.append('Identical wording occurs under different source IDs; these records have not been merged.')
         output.append(RequirementView(id=req.id,feature_id=feature.id,feature=feature.name,category=feature.category,
           title=revision.title,description=revision.description,acceptance_criteria=revision.acceptance_criteria,revision=req.current_revision,
+          design_concept=current.get('design_concept') if current.get('status')=='approved' else None,
           status=current.get('status','proposed'),band=current.get('band','Unscored'),critical=any(a.critical for a,_,_ in items),
           numerator=len(supporting),denominator=denominator,demand=len(supporting)/denominator if denominator else None,likes=len(likes),
           sentiment=sum(means)/len(means) if means else None,mapping_status='reviewed' if all(a.mapping_status=='reviewed' for a,_ in unmet) else 'suggested',
@@ -114,8 +116,8 @@ def decide(session, req_id, request: DecisionRequest):
     override=request.band is not None and request.band!=current.band
     if (request.action in ('reject','postpone','edit','set_band') or override) and len(rationale)<5:
         raise HTTPException(422,'A rationale of at least five characters is required for this decision or override.')
-    previous={'status':current.status,'band':current.band,'revision':current.revision,'title':current.title,'description':current.description,'acceptance_criteria':current.acceptance_criteria}
-    state={'status':current.status,'band':request.band or current.band,'revision':current.revision,'title':current.title,'description':current.description,'acceptance_criteria':current.acceptance_criteria}
+    previous={'status':current.status,'band':current.band,'revision':current.revision,'title':current.title,'description':current.description,'acceptance_criteria':current.acceptance_criteria,'design_concept':current.design_concept}
+    state={'status':current.status,'band':request.band or current.band,'revision':current.revision,'title':current.title,'description':current.description,'acceptance_criteria':current.acceptance_criteria,'design_concept':current.design_concept}
     if request.action=='edit':
         generated_by='PM revision'
         if request.analysis_run_id:
@@ -138,6 +140,12 @@ def decide(session, req_id, request: DecisionRequest):
         state.update({'status':'proposed','band':'Unscored','revision':req.current_revision,'title':revision.title,'description':revision.description,'acceptance_criteria':criteria})
     else:
         state['status']={'approve':'approved','reject':'rejected','postpone':'postponed','set_band':current.status}[request.action]
+    if request.design_concept and (request.action!='approve' or request.cohort.model!='G60'):
+        raise HTTPException(422,'Design concepts can only be attached to G60 approvals.')
+    if request.action=='approve' and 'design_concept' in request.model_fields_set:
+        state['design_concept']=request.design_concept
+    if state['status']!='approved':
+        state['design_concept']=None
     req.status=state['status']; req.band=state['band']
     # Snapshot includes all cohort denominators, supporting IDs and source checksums.
     decision=Decision(requirement_id=req_id,revision=req.current_revision,action=request.action,actor=request.actor,rationale=rationale or 'Approved against the attached evidence snapshot.',previous=previous,current=state,snapshot=snapshot.model_dump())

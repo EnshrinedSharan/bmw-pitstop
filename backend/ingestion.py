@@ -6,6 +6,7 @@ import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
 import pdfplumber
+from pptx import Presentation
 from openpyxl import load_workbook
 from sqlalchemy import select, text
 from .config import DATA_DIR, PIPELINE_VERSION, MAPPING_VERSION
@@ -65,6 +66,75 @@ def import_archive(session, archive, progress=lambda _: None):
         create_evaluation_set(session)
         append_event(session, 'Importer', 'sources.imported', 'archive', summary)
     return summary
+
+def import_files(session, paths, progress=lambda _: None):
+    """Import a supplied subset and retain reference documents as searchable text."""
+    reference_files = {'BMW_G60_Scopes_and_Data.pdf', '261010_BMW_Product_Management_Key_Note(1).pptx'}
+    paths = [Path(path) for path in paths]
+    for path in paths:
+        if path.name not in ALLOWED_FILES | reference_files:
+            raise ValueError(f'Unsupported source file: {path.name}')
+        if not path.is_file() or path.stat().st_size > 30_000_000:
+            raise ValueError(f'Source must be an existing file under 30 MB: {path.name}')
+    seed_taxonomy(session)
+    summary = {'imported': [], 'skipped': []}
+    for path in paths:
+        name = path.name
+        progress(f'Importing {name}')
+        data = path.read_bytes()
+        checksum = hashlib.sha256(data).hexdigest()
+        if session.scalar(select(Source).where(Source.checksum == checksum)):
+            summary['skipped'].append(name)
+            continue
+        if session.scalar(select(Source).where(Source.filename == name, Source.active == True)):
+            raise ValueError(f'{name} has a new checksum. Source-edition replacement requires an explicit migration; existing decisions are preserved.')
+        reference = name in reference_files
+        kind = ('project_reference' if reference else 'customer_statement' if 'feedback_hackathon' in name
+                else 'published_specification' if path.suffix.lower() == '.pdf'
+                else 'aggregate_study' if 'studies' in name else 'sales_aggregate')
+        retained = DATA_DIR / 'sources' / f'{checksum[:16]}-{name}'
+        retained.write_bytes(data)
+        source = Source(id=checksum[:32], filename=name, checksum=checksum, format=path.suffix[1:].lower(),
+                        kind=kind, origin='unknown', language='de' if kind == 'published_specification' else 'en',
+                        market='DE' if kind == 'published_specification' else None,
+                        path=str(retained), extraction_version=PIPELINE_VERSION)
+        session.add(source)
+        session.flush()
+        if reference:
+            if source.format == 'pdf':
+                with pdfplumber.open(io.BytesIO(data)) as pdf:
+                    for number, page in enumerate(pdf.pages, 1):
+                        evidence(session, source, {'page': number, 'bbox': [0, 0, page.width, page.height]},
+                                 page.extract_text(x_tolerance=2) or '', kind, 'G60')
+                    source.record_count = source.row_count = len(pdf.pages)
+            else:
+                deck = Presentation(io.BytesIO(data))
+                for number, slide in enumerate(deck.slides, 1):
+                    blocks = []
+                    def collect(shapes):
+                        for shape in shapes:
+                            if shape.has_text_frame:
+                                blocks.append(shape.text)
+                            if shape.has_table:
+                                blocks.extend(' | '.join(cell.text for cell in row.cells) for row in shape.table.rows)
+                            if hasattr(shape, 'shapes'):
+                                collect(shape.shapes)
+                    collect(slide.shapes)
+                    evidence(session, source, {'slide': number}, '\n'.join(blocks), kind, 'G60')
+                source.record_count = source.row_count = len(deck.slides)
+        elif kind == 'customer_statement':
+            import_feedback(session, source, data)
+        elif kind == 'published_specification':
+            import_pdf(session, source, data)
+        elif kind == 'aggregate_study':
+            import_studies(session, source, data)
+        else:
+            import_sales(session, source, data)
+        summary['imported'].append({'filename': name, 'records': source.record_count, 'rows': source.row_count})
+    create_evaluation_set(session)
+    append_event(session, 'Importer', 'sources.imported', 'files', summary)
+    return summary
+
 
 def import_feedback(session, source, data):
     w = load_workbook(io.BytesIO(data), read_only=True, data_only=True)

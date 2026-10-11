@@ -12,21 +12,33 @@ from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session
 from .db import session_dependency
 from .models import (Source,EvidenceRef,Feedback,Aspect,Feature,Fact,Vehicle,Requirement,RequirementRevision,Decision,AuditEvent,Job,Export,EvaluationLabel,AnalysisRun,now)
-from .schemas import (Cohort,RankingResponse,DecisionRequest,ImportRequest,JobView,AnalysisRequest,AnalysisProposal,ExportRequest,MappingReviewRequest,FactReviewRequest,EvaluationRequest,WebConnectorRequest)
+from .schemas import (Cohort,RankingResponse,DecisionRequest,ImportRequest,JobView,AnalysisRequest,AnalysisProposal,ExportRequest,MappingReviewRequest,FactReviewRequest,EvaluationRequest,WebConnectorRequest,UspResponse)
 from .services import ranking,detail,decide,evidence_detail,evaluation_metrics
+from .vehicle_target import TargetRequest, TargetResult, resolve_target
 from .taxonomy import CATEGORIES
 from .audit import append_event,verify_audit
 from .config import DATA_DIR,DEFAULT_MODEL,PIPELINE_VERSION
 from .jobs import enqueue,recover_jobs,progress_messages
 from .comparisons import comparison
+from .usp import usp_evaluation,DEFAULT_COST_RATIO_LOW,DEFAULT_COST_RATIO_HIGH
+from .trends import trend_evaluation,TrendResponse,Horizon,Market
+from .successor import successor_brief,review_proposal,SuccessorResponse,SuccessorReviewRequest
 
 @asynccontextmanager
 async def lifespan(app):
     recover_jobs()
     yield
 
+from .rag_routes import router as rag_router
+from .reddit_routes import router as reddit_router
+
 app=FastAPI(title='BMW Product Manager Cockpit',version='1.0.0',lifespan=lifespan)
-ORIGINS=['http://127.0.0.1:3000','http://localhost:3000','http://127.0.0.1:8000','http://localhost:8000']
+app.include_router(rag_router)
+app.include_router(reddit_router)
+ORIGINS=['http://127.0.0.1:3001','http://localhost:3001','http://127.0.0.1:8001','http://localhost:8001','http://127.0.0.1:3000','http://localhost:3000','http://127.0.0.1:8000','http://localhost:8000']
+web_port=int(os.getenv('BMWPM_WEB_PORT','3001'))
+if not 1<=web_port<=65535:raise ValueError('BMWPM_WEB_PORT must be a valid local port.')
+ORIGINS.extend([f'http://127.0.0.1:{web_port}',f'http://localhost:{web_port}'])
 app.add_middleware(CORSMiddleware,allow_origins=ORIGINS,allow_methods=['GET','POST'],allow_headers=['Content-Type'])
 app.add_middleware(TrustedHostMiddleware,allowed_hosts=['127.0.0.1','localhost','testserver'])
 
@@ -87,6 +99,11 @@ def requirement_detail(requirement_id:str,db:DB,cohort:COHORT):
 def requirement_decision(requirement_id:str,request:DecisionRequest,db:DB):
     return decide(db,requirement_id,request)
 
+@app.post('/api/v1/vehicle-target',response_model=TargetResult)
+def vehicle_target(request:TargetRequest,db:DB):
+    item,_=detail(db,request.requirement_id,request.cohort)
+    return resolve_target(item,request.cohort,request.allow_live)
+
 @app.get('/api/v1/sources')
 def sources(db:DB):
     return [{k:v for k,v in row_dict(s).items() if k!='path'} for s in db.scalars(select(Source).where(Source.active==True).order_by(Source.filename))]
@@ -95,8 +112,8 @@ def sources(db:DB):
 def source_file(source_id:str,db:DB):
     source=db.get(Source,source_id)
     if not source: raise HTTPException(404,'Source not found.')
-    media={'pdf':'application/pdf','html':'text/html'}.get(source.format,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    return FileResponse(source.path,media_type=media,filename=source.filename,content_disposition_type='inline')
+    media={'pdf':'application/pdf','html':'text/html','csv':'text/csv','txt':'text/plain','md':'text/plain','zip':'application/zip','jsonl':'application/x-ndjson','pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation'}.get(source.format,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return FileResponse(source.path,media_type=media,filename=source.filename,content_disposition_type='inline' if source.format=='pdf' else 'attachment')
 
 @app.get('/api/v1/sources/{source_id}/pages/{page_number}')
 def source_page(source_id:str,page_number:int,db:DB):
@@ -118,6 +135,11 @@ def source_page(source_id:str,page_number:int,db:DB):
                 bitmap.close();page.close()
                 temp.replace(cache)
     return FileResponse(cache,media_type='image/png',headers={'Cache-Control':'private, max-age=86400'})
+
+@app.get('/api/v1/feedback')
+def feedback_register(db:DB,cohort:COHORT,q:str='',category:str='',source_id:str='',offset:int=Query(0,ge=0),limit:int=Query(20,ge=1,le=100)):
+    from .feedback import list_feedback
+    return list_feedback(db,cohort,q,category,source_id,offset,limit)
 
 @app.get('/api/v1/evidence')
 def evidence_search(db:DB,q:str='',model:str|None=None,source_id:str|None=None,kind:str|None=None,origin:Literal['unknown','observed','synthetic','all']='all',offset:int=Query(0,ge=0),limit:int=Query(30,ge=1,le=100)):
@@ -227,10 +249,29 @@ def job_status(job_id:str,db:DB):
 def retry_job(job_id:str,db:DB):
     job=db.get(Job,job_id)
     if not job or job.state not in ('failed','interrupted'):raise HTTPException(409,'Only failed or interrupted jobs can be retried.')
+    if job.kind=='reddit_pipeline':raise HTTPException(409,'Enter your API key on Reviews & Comments to start a new collection.')
     return enqueue(db,job.kind,job.input)
 
 @app.get('/api/v1/comparisons')
 def comparisons(db:DB): return comparison(db)
+
+@app.get('/api/v1/usp',response_model=UspResponse)
+def usp(db:DB,cohort:COHORT,cost_ratio_low:float=Query(DEFAULT_COST_RATIO_LOW,gt=0,le=1),cost_ratio_high:float=Query(DEFAULT_COST_RATIO_HIGH,gt=0,le=1)):
+    if cost_ratio_low>cost_ratio_high: raise HTTPException(422,'The low cost ratio cannot exceed the high cost ratio.')
+    return usp_evaluation(db,cohort,cost_ratio_low,cost_ratio_high)
+
+@app.get('/api/v1/trends',response_model=TrendResponse)
+def trends(db:DB,cohort:COHORT,category:str|None=None,horizon:Horizon|None=None,market:Market|None=None):
+    if category and category not in CATEGORIES: raise HTTPException(422,'Unknown product category.')
+    return trend_evaluation(db,cohort,category,horizon,market)
+
+@app.get('/api/v1/successor',response_model=SuccessorResponse)
+def successor(db:DB,cohort:COHORT):
+    return successor_brief(db,cohort)
+
+@app.post('/api/v1/successor/{proposal_id}/review')
+def successor_review(proposal_id:str,request:SuccessorReviewRequest,db:DB):
+    return review_proposal(db,proposal_id,request)
 
 @app.get('/api/v1/decisions')
 def decisions(db:DB,limit:int=Query(50,le=200,ge=1)):

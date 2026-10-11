@@ -1,1 +1,2 @@
-openai>=2.29.0,<3
+# Uses the same SDK version as the integrated application.
+openai==3.28.0
