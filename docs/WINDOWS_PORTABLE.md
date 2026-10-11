@@ -1,4 +1,4 @@
-# BMW Product Intelligence — portable Windows edition
+# BMW Pitstop — portable Windows edition
 
 ## Open the app
 

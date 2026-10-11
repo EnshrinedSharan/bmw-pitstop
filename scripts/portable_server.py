@@ -82,7 +82,7 @@ def main():
         import uvicorn
         server = uvicorn.Server(uvicorn.Config(create_app(web_root), host='127.0.0.1', port=port, log_level='warning'))
         url = f'http://127.0.0.1:{port}/'
-        print(f'BMW Product Intelligence\n\nOpen {url}\nKeep this window open. Press Ctrl+C to stop.\n', flush=True)
+        print(f'BMW Pitstop\n\nOpen {url}\nKeep this window open. Press Ctrl+C to stop.\n', flush=True)
 
         def open_browser():
             for _ in range(300):

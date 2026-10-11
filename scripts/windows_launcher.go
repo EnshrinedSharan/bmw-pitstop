@@ -16,7 +16,7 @@ import (
 )
 
 func fail(err error) {
-    fmt.Println("Could not start BMW Product Intelligence:", err)
+    fmt.Println("Could not start BMW Pitstop:", err)
     fmt.Println("Extract the complete ZIP to a writable folder, then try again.")
     fmt.Println("Press Enter to close.")
     bufio.NewReader(os.Stdin).ReadString('\n')

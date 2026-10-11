@@ -26,7 +26,7 @@ def text_box(slide,x,y,w,h,text,size=20,color=NAVY,bold=False):
 
 def slide_base(prs,title,subtitle=None):
     slide=prs.slides.add_slide(prs.slide_layouts[6])
-    text_box(slide,.65,.45,12,0.35,'BMW PRODUCT INTELLIGENCE',12,BLUE,True)
+    text_box(slide,.65,.45,12,0.35,'BMW PITSTOP',12,BLUE,True)
     text_box(slide,.65,1.02,12,1,title,32,NAVY,True)
     if subtitle: text_box(slide,.65,2.00,12,.65,subtitle,17,GRAY)
     text_box(slide,.65,7.03,11,.25,'Supplied hackathon evidence. Origin unverified. Dates unavailable for feedback.',10,GRAY)

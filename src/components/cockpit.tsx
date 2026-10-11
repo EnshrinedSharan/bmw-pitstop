@@ -42,7 +42,7 @@ export function Cockpit(){
  const exportDeck=()=>runJob('/exports',{cohort,include_scenario:true},result=>{window.location.href=result.download_url as string;});
  const selectedName=meta?.models.find(m=>m.id===cohort.model)?.name||'5 Series';
  return <div className="app-shell">
-  <aside className="sidebar"><div className="brand"><Image src="/bmw-roundel.svg" alt="BMW roundel" width={42} height={42} className="brand-logo"/><div className="brand-copy"><strong>PRODUCT</strong><span>INTELLIGENCE</span></div></div>
+  <aside className="sidebar"><div className="brand"><Image src="/bmw-roundel.svg" alt="BMW roundel" width={42} height={42} className="brand-logo"/><div className="brand-copy"><strong>PITSTOP</strong></div></div>
    <div className="workspace-switch"><span className="workspace-series">{cohort.model}</span><div><strong>{selectedName.toUpperCase()}</strong><small>PRODUCT PROGRAMME</small></div></div>
    <div className="nav-label">ANALYSIS</div><nav>{views.map(item=><button key={item.id} aria-label={item.label} onClick={()=>{if(item.id==='rag')setDocumentContext(undefined);setView(item.id);}} className={(view===item.id||(view==='split'&&['requirements','model'].includes(item.id)))?'nav-item active':'nav-item'} aria-current={(view===item.id||(view==='split'&&['requirements','model'].includes(item.id)))?'page':undefined}><item.icon size={18}/><span>{item.label}</span></button>)}</nav>
    <div className="sidebar-bottom"><span className="green-dot"/><div>LOCAL DATA<small>C01–C10 · taxonomy v2</small></div></div>
