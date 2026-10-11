@@ -1,11 +1,23 @@
 """Read-only customer comment register; each result is a source-scoped feedback ID."""
 from sqlalchemy import select, func
 from .models import Feedback, Source, Aspect, Feature, EvidenceRef
-from .services import cohort_query
+
+
+def register_query(cohort):
+    # Unlike analysis cohorts, the register keeps comments whose market or powertrain is unknown
+    # (e.g. Reddit imports) visible under a specific filter; each card still labels them as unknown.
+    query = select(Feedback).join(Source, Feedback.source_id == Source.id).where(Feedback.model == cohort.model, Source.active == True)
+    if cohort.country != 'all':
+        query = query.where(Feedback.country.in_([cohort.country, 'unknown']))
+    if cohort.powertrain != 'all':
+        query = query.where(Feedback.powertrain.in_([cohort.powertrain, 'unknown']))
+    if cohort.origin != 'all':
+        query = query.where(Feedback.origin == cohort.origin)
+    return query
 
 
 def list_feedback(db, cohort, q='', category='', source_id='', offset=0, limit=20, channel=''):
-    query = cohort_query(cohort)
+    query = register_query(cohort)
     if q.strip():
         term = q.strip()
         query = query.where(Feedback.text.contains(term, autoescape=True) |

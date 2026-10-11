@@ -212,3 +212,13 @@ def test_feedback_lists_newest_import_first_and_filters_reddit(client, harness):
     assert reddit['total'] >= 1
     assert all(item['source_label'].startswith('Reddit') for item in reddit['items'])
     assert client.get('/api/v1/feedback', params=params | {'channel': 'other'}).status_code == 422
+
+
+def test_reddit_comments_with_unknown_market_stay_visible_under_default_market(client, harness):
+    job_id = start(client, harness)
+    source_id = finish(client, harness, job_id)['result']['imported_source_id']
+    # The cockpit opens on market US; Reddit imports carry an unknown market and must not vanish.
+    params = {'model': 'G60', 'country': 'US', 'powertrain': 'ICE', 'origin': 'unknown'}
+    data = client.get('/api/v1/feedback', params=params).json()
+    assert data['items'][0]['source_id'] == source_id
+    assert data['items'][0]['country'] == 'unknown'
