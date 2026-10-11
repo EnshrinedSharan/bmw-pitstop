@@ -88,6 +88,9 @@ def test_complete_pipeline_and_import(client, session, harness, model):
     assert collector[collector.index('--topic') + 1] == 'BMW ' + model
     assert collector[collector.index('--count') + 1] == '2'
     assert '--model' in collector and '--model' in categorizer
+    assert '--fresh' in collector
+    exclude = Path(collector[collector.index('--exclude-file') + 1])
+    assert exclude.name == 'previously_imported.jsonl' and exclude.parent == pipeline.run_folder(job_id)
     for artifact in pipeline.ARTIFACTS:
         response = client.get(f'/api/v1/reddit/runs/{job_id}/files/{artifact}')
         assert response.status_code == 200
@@ -178,3 +181,34 @@ def test_changed_artifact_blocks_repeat_import(client, harness):
     output.write_text('{}\n', encoding='utf-8')
     response = client.post(f'/api/v1/reddit/runs/{job_id}/import')
     assert response.status_code == 409 and 'changed' in response.text
+
+
+def test_repeat_run_excludes_and_skips_already_imported_comments(client, session, harness):
+    first = start(client, harness)
+    finish(client, harness, first)
+    second = start(client, harness)
+    job = finish(client, harness, second)
+    assert job['state'] == 'succeeded', job
+    collector = harness[1][2]
+    exclude = Path(collector[collector.index('--exclude-file') + 1])
+    previous = [json.loads(line) for line in exclude.read_text(encoding='utf-8').splitlines()]
+    assert RAW[0]['comment_text'] in {row['comment_text'] for row in previous}
+    # The mocked collector returns the same comment again; it must not be imported twice.
+    assert job['result']['imported'] == 0 and job['result']['already_present'] == 1
+    assert job['result']['imported_source_id'] is None
+    assert 'already in Reviews & Comments' in job['progress']
+    count = session.scalar(select(func.count()).select_from(Feedback).where(
+        Feedback.model == 'G60', Feedback.text == RAW[0]['comment_text']))
+    assert count == 1
+
+
+def test_feedback_lists_newest_import_first_and_filters_reddit(client, harness):
+    job_id = start(client, harness)
+    source_id = finish(client, harness, job_id)['result']['imported_source_id']
+    params = {'model': 'G60', 'country': 'all', 'origin': 'all'}
+    newest = client.get('/api/v1/feedback', params=params).json()['items'][0]
+    assert newest['source_id'] == source_id
+    reddit = client.get('/api/v1/feedback', params=params | {'channel': 'reddit', 'limit': 100}).json()
+    assert reddit['total'] >= 1
+    assert all(item['source_label'].startswith('Reddit') for item in reddit['items'])
+    assert client.get('/api/v1/feedback', params=params | {'channel': 'other'}).status_code == 422

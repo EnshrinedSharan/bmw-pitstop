@@ -4,7 +4,7 @@ from .models import Feedback, Source, Aspect, Feature, EvidenceRef
 from .services import cohort_query
 
 
-def list_feedback(db, cohort, q='', category='', source_id='', offset=0, limit=20):
+def list_feedback(db, cohort, q='', category='', source_id='', offset=0, limit=20, channel=''):
     query = cohort_query(cohort)
     if q.strip():
         term = q.strip()
@@ -16,12 +16,15 @@ def list_feedback(db, cohort, q='', category='', source_id='', offset=0, limit=2
         query = query.where(matching)
     if source_id:
         query = query.where(Feedback.source_id == source_id)
+    if channel == 'reddit':
+        query = query.where(Feedback.source_label.startswith('Reddit'))
     matched = query.subquery()
     total = db.scalar(select(func.count()).select_from(matched))
     source_count = db.scalar(select(func.count(func.distinct(matched.c.source_id))))
     critical = select(Aspect.id).where(Aspect.feedback_id == matched.c.id, Aspect.critical == True).exists()
     critical_count = db.scalar(select(func.count()).select_from(matched).where(critical))
-    records = db.scalars(query.order_by(Feedback.external_id, Feedback.id).offset(offset).limit(limit)).all()
+    # Newest imports first, so a fresh collection appears at the top.
+    records = db.scalars(query.order_by(Source.retrieved_at.desc(), Source.id, Feedback.external_id, Feedback.id).offset(offset).limit(limit)).all()
     if not records:
         return {'items': [], 'total': total, 'source_count': source_count, 'critical_count': critical_count}
     sources = {s.id: s for s in db.scalars(select(Source).where(Source.id.in_({r.source_id for r in records})))}

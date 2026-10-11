@@ -17,6 +17,7 @@ interface CommentRecord {
 interface CommentResults { items: CommentRecord[]; total: number; source_count: number; critical_count: number }
 interface Source { id: string; filename: string; kind: string }
 const PAGE_SIZE = 20;
+const REDDIT_ONLY = 'reddit';
 const originLabel = (origin: string) => origin === 'unknown' ? 'Supplied / unverified' : origin === 'synthetic' ? 'Synthetic' : origin === 'observed' ? 'Observed' : 'Origin unknown';
 
 export function ReviewsComments({ cohort, version, categories, onEvidence, onImported }: {
@@ -32,7 +33,8 @@ export function ReviewsComments({ cohort, version, categories, onEvidence, onImp
     return () => clearTimeout(timeout);
   }, [query]);
   const params = cohortQuery(cohort) + '&' + new URLSearchParams({
-    q: search, category, source_id: source, offset: String(offset), limit: String(PAGE_SIZE),
+    q: search, category, source_id: source === REDDIT_ONLY ? '' : source, channel: source === REDDIT_ONLY ? REDDIT_ONLY : '',
+    offset: String(offset), limit: String(PAGE_SIZE),
   });
   const { data, error, loading } = useApi<CommentResults>('/feedback?' + params, version);
   const { data: sources } = useApi<Source[]>('/sources', version);
@@ -51,11 +53,11 @@ export function ReviewsComments({ cohort, version, categories, onEvidence, onImp
       <section className="metric"><div className="metric-label">Critical-review flags<AlertTriangle size={18}/></div><strong className="metric-value">{data ? number(data.critical_count) : '—'}</strong><p>Flagged comments requiring closer review</p></section>
     </div>
     <section className="panel" aria-label="Reviews and comments">
-      <div className="panel-heading"><div><h2>Reviews & Comments</h2><p>Browse customer statements for the model, market, powertrain, and origin selected above.</p></div><span className="reviews-register-label"><Quote size={16}/> Original wording</span></div>
+      <div className="panel-heading"><div><h2>Reviews & Comments</h2><p>Browse customer statements for the model, market, powertrain, and origin selected above. Newest imports are shown first.</p></div><span className="reviews-register-label"><Quote size={16}/> Original wording</span></div>
       <div className="list-toolbar reviews-toolbar">
         <div className="search-input"><Search size={17}/><input aria-label="Search reviews and comments" placeholder="Search comments or feedback IDs…" value={query} onChange={e => setQuery(e.target.value)}/></div>
         <select aria-label="Comment category" value={category} onChange={e => { setCategory(e.target.value); setOffset(0); }}><option value="">All categories</option>{Object.entries(categories).map(([id, name]) => <option key={id} value={id}>{id} · {name}</option>)}</select>
-        <select aria-label="Comment source" value={source} onChange={e => { setSource(e.target.value); setOffset(0); }}><option value="">All source files</option>{sources?.filter(s => s.kind === 'customer_statement').map(s => <option key={s.id} value={s.id}>{s.filename}</option>)}</select>
+        <select aria-label="Comment source" value={source} onChange={e => { setSource(e.target.value); setOffset(0); }}><option value="">All source files</option><option value={REDDIT_ONLY}>All Reddit collections</option>{sources?.filter(s => s.kind === 'customer_statement').map(s => <option key={s.id} value={s.id}>{s.filename}</option>)}</select>
         {filtering && <Button variant="ghost" size="sm" onClick={clearFilters}>Clear filters</Button>}
       </div>
       {error ? <div className="reviews-message"><ErrorBox message={error}/></div> : !data || loading ? <Loading/> : data.items.length ? <>

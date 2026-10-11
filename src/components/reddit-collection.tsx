@@ -9,7 +9,8 @@ import { Badge, ErrorBox } from './cockpit';
 type Model = 'G60' | 'G70' | 'F70';
 interface Result {
   requested: number; collected: number; categorized: number; discarded: number; shortfall: number;
-  model: Model; ready_for_import: boolean; artifacts: Record<string, string>; imported_source_id?: string;
+  model: Model; ready_for_import: boolean; artifacts: Record<string, string>; imported_source_id?: string | null;
+  imported?: number; already_present?: number;
 }
 
 export function RedditCollection({ initialModel, onImported }: { initialModel: string; onImported: (model: Model) => void }) {
@@ -90,7 +91,7 @@ export function RedditCollection({ initialModel, onImported }: { initialModel: s
       <label><span>Comment count</span><input type="text" inputMode="numeric" pattern="[0-9]+" aria-label="Reddit comment count" required value={count} maxLength={5} disabled={submitting || active} onChange={e => setCount(e.target.value)} placeholder="100"/><small>1–10,000 comments requested</small></label>
       <Button type="submit" disabled={submitting || active}>{submitting || active ? <LoaderCircle className="spin" size={15}/> : <ArrowRight size={15}/>} {active ? 'Collection running' : submitting ? 'Starting…' : 'Collect & categorize'}</Button>
     </form>
-    <p className="reddit-run-note">This starts paid OpenAI requests. Collection may return fewer comments than requested; categorization removes irrelevant comments. Quotations remain unverified until reviewed. Market and powertrain stay unknown.</p>
+    <p className="reddit-run-note">This starts paid OpenAI requests. Each run looks for the newest threads first and skips comments already imported for this model. Collection may return fewer comments than requested; categorization removes irrelevant comments. Quotations remain unverified until reviewed. Market and powertrain stay unknown.</p>
     {error && <div className="reddit-run-error"><ErrorBox message={error}/></div>}
     {runs.length > 0 && <div className="reddit-runs" aria-live="polite">{runs.map(run => {
       const result = run.result as unknown as Result | null;
@@ -101,9 +102,9 @@ export function RedditCollection({ initialModel, onImported }: { initialModel: s
         {run.error && <ErrorBox message={run.error}/>}
         {(run.state === 'failed' || run.state === 'interrupted') && <small>Enter your API key again to start a new run. Previous files remain preserved.</small>}
         {result && run.state === 'succeeded' && <>
-          <div className="reddit-result-counts"><span><strong>{number(result.collected)}</strong> collected</span><span><strong>{number(result.categorized)}</strong> categorized</span><span><strong>{number(result.discarded)}</strong> filtered out</span>{result.shortfall > 0 && <span className="reddit-shortfall"><strong>{number(result.shortfall)}</strong> collection shortfall</span>}</div>
+          <div className="reddit-result-counts"><span><strong>{number(result.collected)}</strong> collected</span><span><strong>{number(result.categorized)}</strong> categorized</span><span><strong>{number(result.discarded)}</strong> filtered out</span>{typeof result.imported === 'number' && <span><strong>{number(result.imported)}</strong> new</span>}{!!result.already_present && <span><strong>{number(result.already_present)}</strong> already imported</span>}{result.shortfall > 0 && <span className="reddit-shortfall"><strong>{number(result.shortfall)}</strong> collection shortfall</span>}</div>
           <div className="reddit-result-actions"><a className="button button-outline button-sm" href={result.artifacts['categorized.jsonl']}><Download size={13}/>categorized.jsonl</a><a className="button button-outline button-sm" href={result.artifacts['import-bundle.zip']}><Download size={13}/>Import bundle</a><a className="text-link" href={result.artifacts['input.jsonl']}>Collected input</a><a className="text-link" href={result.artifacts['manifest.json']}>Run details</a>
-          {result.ready_for_import && <Button size="sm" disabled={!!importing} onClick={() => result.imported_source_id ? onImported(result.model) : void importRun(run, result)}>{importing === run.id ? <LoaderCircle className="spin" size={13}/> : result.imported_source_id ? <Check size={13}/> : <ArrowRight size={13}/>}{result.imported_source_id ? 'View imported comments' : 'Retry import into reviews'}</Button>}</div>
+          {result.ready_for_import && !(result.imported === 0 && result.already_present && !result.imported_source_id) && <Button size="sm" disabled={!!importing} onClick={() => result.imported_source_id ? onImported(result.model) : void importRun(run, result)}>{importing === run.id ? <LoaderCircle className="spin" size={13}/> : result.imported_source_id ? <Check size={13}/> : <ArrowRight size={13}/>}{result.imported_source_id ? 'View imported comments' : 'Retry import into reviews'}</Button>}</div>
           {!result.ready_for_import && <small>No relevant comments remain to import. The output and collected input are available for inspection.</small>}
         </>}
       </article>;

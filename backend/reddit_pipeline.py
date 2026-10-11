@@ -25,6 +25,7 @@ COLLECTOR = ROOT / 'reddit_collector' / 'collect_reddit.py'
 CATEGORIZER = ROOT / 'Categorized-Scrapped-Data' / 'categorize_comments.py'
 ARTIFACTS = {'input.jsonl', 'categorized.jsonl', 'manifest.json', 'import-bundle.zip'}
 MAX_COUNT = 10000
+REDDIT_LABEL = 'Reddit · unverified model extraction'
 submission_lock = threading.Lock()
 
 
@@ -87,6 +88,17 @@ def validate_output(folder, requested):
     return original, output
 
 
+def previously_imported(db, model):
+    """Raw collector records for Reddit comments already in Reviews & Comments for this model."""
+    rows = db.scalars(select(Feedback.tags).where(Feedback.model == model, Feedback.source_label == REDDIT_LABEL))
+    records = []
+    for tags in rows:
+        raw = next((t.get('raw_source') for t in tags if isinstance(t, dict) and isinstance(t.get('raw_source'), dict)), None)
+        if raw and isinstance(raw.get('comment_text'), str):
+            records.append({k: raw.get(k) for k in ('comment_text', 'thread_id', 'source_url', 'author')})
+    return records
+
+
 def stage(job_id, message):
     progress_messages[job_id] = message
     with SessionLocal() as db:
@@ -145,9 +157,15 @@ def execute_pipeline(job_id, secret):
             db.commit()
         folder = run_folder(job_id)
         folder.mkdir(parents=True, exist_ok=False)
+        with SessionLocal() as db:
+            prior = previously_imported(db, payload['model'])
+        # Earlier comments are excluded so each run brings new ones rather than re-reading the same threads.
+        (folder / 'previously_imported.jsonl').write_text(
+            ''.join(json.dumps(row, ensure_ascii=False) + '\n' for row in prior), encoding='utf-8')
         stage(job_id, '1 / 3 · Collecting Reddit quotations with OpenAI web search')
         code = command([COLLECTOR, '--topic', 'BMW ' + payload['model'], '--count', payload['count'],
-                        '--out', folder / 'collector', '--model', payload['collector_model']], secret, 7200)
+                        '--out', folder / 'collector', '--model', payload['collector_model'],
+                        '--fresh', '--exclude-file', folder / 'previously_imported.jsonl'], secret, 7200)
         if code not in (0, 2):
             raise PipelineError('Collection failed. Check your API key, model access, quota, and connection; saved partial files remain in the run folder.')
         collected_path = folder / 'collector' / 'comments.jsonl'
@@ -197,7 +215,9 @@ def execute_pipeline(job_id, secret):
                     imported = import_result(db, job)
                     base_result['imported_source_id'] = imported['source_id']
                     base_result['imported'] = imported['imported']
-                    job.progress = f"Imported {len(output)} categorized comments · visible in Reviews & Comments"
+                    base_result['already_present'] = imported.get('already_present', 0)
+                    job.progress = (f"Imported {imported['imported']} new comments · visible in Reviews & Comments" if imported['imported']
+                                    else 'Complete · every categorized comment was already in Reviews & Comments')
                 else:
                     job.progress = 'Complete · all comments were filtered out'
                 job.result = base_result
@@ -241,17 +261,32 @@ def import_result(db, job):
     checksum = sha256(bundle)
     prior = db.scalar(select(Source).where(Source.checksum == checksum))
     if prior:
-        return {'source_id': prior.id, 'imported': 0, 'skipped': len(categorized), 'model': job.input['model']}
+        return {'source_id': prior.id, 'imported': 0, 'skipped': len(categorized), 'already_present': len(categorized), 'model': job.input['model']}
+    # Skip comments already imported for this model by an earlier Reddit run.
+    hashes = {row['row_id']: hashlib.sha256(row['comment'].encode('utf-8')).hexdigest() for row in categorized}
+    existing = set(db.scalars(select(Feedback.text_hash).where(
+        Feedback.model == job.input['model'], Feedback.source_label == REDDIT_LABEL,
+        Feedback.text_hash.in_(set(hashes.values())))))
+    fresh, seen = [], set(existing)
+    for row in categorized:
+        if hashes[row['row_id']] not in seen:
+            seen.add(hashes[row['row_id']])
+            fresh.append(row)
+    already_present = len(categorized) - len(fresh)
+    if not fresh:
+        return {'source_id': None, 'imported': 0, 'skipped': len(categorized), 'already_present': already_present, 'model': job.input['model']}
     seed_taxonomy(db)
     source = Source(id=checksum[:32], checksum=checksum, format='zip', kind='customer_statement',
                     filename=f"BMW-{job.input['model']}-Reddit-{job.id[:8]}.zip",
                     path=str(bundle), origin='unknown', market=None, language='unknown',
-                    extraction_version='reddit-import-v1', record_count=len(categorized), row_count=len(categorized))
+                    extraction_version='reddit-import-v1', record_count=len(fresh), row_count=len(fresh))
     db.add(source)
     db.flush()
     raw_by_id = {r['row_id']: r for r in original}
     category_codes = {name: code for code, name in CATEGORIES.items()}
-    for line, row in enumerate(categorized, 1):
+    lines = {row['row_id']: line for line, row in enumerate(categorized, 1)}
+    for row in fresh:
+        line = lines[row['row_id']]
         raw = raw_by_id[row['row_id']]
         category = category_codes[row['categorie']]
         feature_id = 'reddit-category-' + category.lower()
@@ -264,10 +299,10 @@ def import_result(db, job):
                    'raw_record': raw, 'manifest': 'manifest.json', 'category': row['categorie'],
                    'sentiment_score': row['sentiment_score']}
         ref = evidence(db, source, locator, row['comment'], 'customer_statement', job.input['model'])
-        text_hash = hashlib.sha256(row['comment'].encode('utf-8')).hexdigest()
+        text_hash = hashes[row['row_id']]
         record = Feedback(id=source.id + ':' + row['row_id'], source_id=source.id, external_id=row['row_id'],
                           model=job.input['model'], country='unknown', powertrain='unknown', raw_powertrain='unknown',
-                          text=row['comment'], text_hash=text_hash, origin='unknown', source_label='Reddit · unverified model extraction',
+                          text=row['comment'], text_hash=text_hash, origin='unknown', source_label=REDDIT_LABEL,
                           source_date=None, duplicate_text=bool(db.scalar(select(Feedback.id).where(Feedback.text_hash == text_hash).limit(1))),
                           tags=[{'row': line, 'type': 'Unclassified', 'level2': row['categorie'], 'level3': None,
                                  'evidence_id': ref.id, 'raw_source': raw, 'sentiment_score': row['sentiment_score']}])
@@ -279,6 +314,6 @@ def import_result(db, job):
                       mapping_version='reddit-import-v1', sentiment=row['sentiment_score'],
                       critical=serious_concern(row['comment'], 'Unclassified')))
     append_event(db, 'Demo PM', 'reddit.imported', source.id, {
-        'run_id': job.id, 'model': job.input['model'], 'records': len(categorized),
+        'run_id': job.id, 'model': job.input['model'], 'records': len(fresh), 'already_present': already_present,
         'origin': 'unknown', 'checksum': checksum, 'counts': manifest['counts']})
-    return {'source_id': source.id, 'imported': len(categorized), 'skipped': 0, 'model': job.input['model']}
+    return {'source_id': source.id, 'imported': len(fresh), 'skipped': already_present, 'already_present': already_present, 'model': job.input['model']}

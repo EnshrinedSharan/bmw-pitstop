@@ -137,9 +137,9 @@ def source_page(source_id:str,page_number:int,db:DB):
     return FileResponse(cache,media_type='image/png',headers={'Cache-Control':'private, max-age=86400'})
 
 @app.get('/api/v1/feedback')
-def feedback_register(db:DB,cohort:COHORT,q:str='',category:str='',source_id:str='',offset:int=Query(0,ge=0),limit:int=Query(20,ge=1,le=100)):
+def feedback_register(db:DB,cohort:COHORT,q:str='',category:str='',source_id:str='',channel:Literal['','reddit']='',offset:int=Query(0,ge=0),limit:int=Query(20,ge=1,le=100)):
     from .feedback import list_feedback
-    return list_feedback(db,cohort,q,category,source_id,offset,limit)
+    return list_feedback(db,cohort,q,category,source_id,offset,limit,channel)
 
 @app.get('/api/v1/evidence')
 def evidence_search(db:DB,q:str='',model:str|None=None,source_id:str|None=None,kind:str|None=None,origin:Literal['unknown','observed','synthetic','all']='all',offset:int=Query(0,ge=0),limit:int=Query(30,ge=1,le=100)):

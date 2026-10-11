@@ -319,6 +319,54 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(row["status"], "pending")
         self.assertEqual(row["batches"], 0)
 
+    def test_previously_imported_comments_are_never_collected_again(self):
+        self.state.add_threads([URL])
+        self.state.add_prior([{"comment_text": fixture(1)["comment_text"], "source_url": URL, "author": "earlier_user"}])
+        ai = Mock()
+        ai.extract.side_effect = [batch([fixture(1), fixture(2)]), batch([fixture(3)])]
+        ai.discover.return_value = []
+        with contextlib.redirect_stdout(io.StringIO()):
+            collector.collect(self.state, collector.parse_args(["--count", "2"]), ai)
+        texts = [json.loads(r[0])["comment_text"] for r in self.state.db.execute("SELECT payload FROM comments")]
+        self.assertEqual(texts, [fixture(2)["comment_text"], fixture(3)["comment_text"]])
+        seen = ai.extract.call_args_list[0].args[4]
+        self.assertEqual(seen[0], {"author": "earlier_user", "text_start": fixture(1)["comment_text"]})
+        self.assertEqual(self.state.prior_thread_ids(), ["abc123"])
+
+    def test_fresh_mode_skips_seeds_and_prefers_newest(self):
+        exclude = self.folder / "prior.jsonl"
+        exclude.write_text(json.dumps({"comment_text": "Earlier comment text here.", "thread_id": "old999"}) + "\n", encoding="utf-8")
+        out = self.folder / "fresh"
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "synthetic-test-key"}, clear=True), \
+             patch.object(collector, "OpenAIService") as service, \
+             patch.object(collector, "collect", return_value="synthetic stop"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            collector.main(["--out", str(out), "--fresh", "--exclude-file", str(exclude)])
+        self.assertTrue(service.call_args.kwargs["fresh"])
+        state = collector.State(out, self.config)
+        try:
+            self._check_fresh_requests(state)
+        finally:
+            state.db.close()
+
+    def _check_fresh_requests(self, state):
+        self.assertEqual(state.db.execute("SELECT COUNT(*) FROM threads").fetchone()[0], 0)
+        self.assertEqual(state.prior_thread_ids(), ["old999"])
+        captured = {}
+        def create(**kwargs):
+            captured.update(kwargs)
+            raise collector.StopCollection("stop")
+        ai = collector.OpenAIService(state, "gpt-5.5", 5, client=Mock(responses=Mock(create=Mock(side_effect=create))), fresh=True)
+        ai.request = lambda purpose, **kwargs: create(**kwargs)
+        with self.assertRaises(collector.StopCollection):
+            ai.discover("BMW G60", "sedan", [])
+        payload = json.loads(captured["input"])
+        self.assertIn("newest first", payload["task"])
+        self.assertIn("old999", payload["already_seen_thread_ids"])
+        with self.assertRaises(collector.StopCollection):
+            ai.extract("BMW G60", "sedan", THREAD, 30, [])
+        self.assertTrue(json.loads(captured["input"])["suggested_view"].endswith("?sort=new"))
+
     def test_missing_key_cli_has_no_reddit_credential_requirement(self):
         with patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(io.StringIO()):
             code = collector.main(["--out", str(self.folder / "cli"), "--topic", "Synthetic topic"])

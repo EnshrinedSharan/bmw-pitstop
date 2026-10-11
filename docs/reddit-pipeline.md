@@ -10,6 +10,17 @@ The Next.js page calls the Python API, which queues a job and invokes the two ex
 4. When categorization finishes, validated rows are imported automatically and the page switches to the selected model with all markets and powertrains, making the new comments visible immediately.
 5. Inspect collected, retained, discarded, and shortfall counts. Download **categorized.jsonl** or the complete **Import bundle**. **Retry import into reviews** remains available if an older completed run was not imported.
 
+### Getting new comments on each run
+
+Each run asks for comments the app does not already have:
+
+- The collector runs with `--fresh`. It skips the built-in G60 seed-thread list, searches for the newest threads first, and reads each thread sorted by new.
+- Before collection, the worker writes `previously_imported.jsonl` to the run folder. It holds the Reddit comments already in Reviews & Comments for the selected model. The collector receives it as `--exclude-file`, tells the model which comments it already has, and never accepts them again.
+- When importing, comments whose text already exists in an earlier Reddit import for the same model are skipped. The run shows how many comments were new and how many were already imported.
+- Reviews & Comments lists the newest imports first. The source filter's **All Reddit collections** option shows only Reddit comments.
+
+These steps reduce repeats, but they do not make the data live. Comments only change when you start a new run.
+
 The collector uses OpenAI web search. Quotations are marked unverified model extraction, not independently verified Reddit comments. A count target can be missed. Categorization can discard some or all collected rows.
 
 ## Execution and files
