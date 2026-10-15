@@ -1,2 +1,2 @@
-import { Cockpit } from '@/components/cockpit';
-export default function Page() { return <Cockpit/>; }
+import { Landing } from '@/components/landing/landing';
+export default function Page() { return <Landing/>; }

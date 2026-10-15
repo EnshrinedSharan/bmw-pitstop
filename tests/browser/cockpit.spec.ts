@@ -13,7 +13,7 @@ test('offline evidence inspection, saved replay, editing, approval, and frozen d
   webConnected=true;
   await route.fulfill({json:{id:'web-e2e',kind:'web_connector',state:'succeeded',input:payload,result:{imported:[{url:payload.urls[0],records:1}],skipped:[],failed:[]},error:null,progress:'Complete',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}});
  });
- await page.goto('/');
+ await page.goto('/cockpit');
  await expect(page.getByText('3,610',{exact:true}).first()).toBeVisible();
  await page.getByRole('button',{name:'Connect web evidence',exact:true}).click();
  const connector=page.getByRole('dialog',{name:'Connect web evidence',exact:true});

@@ -17,7 +17,7 @@ test('Reddit collection form safely submits inputs and presents the completed ha
       await route.fulfill({ json: job ? [job] : [] });
     }
   });
-  await page.goto('/');
+  await page.goto('/cockpit');
   await page.getByRole('button', { name: 'Reviews & Comments', exact: true }).click();
   const keyField = page.getByLabel('OpenAI API key', { exact: true });
   await expect(keyField).toHaveAttribute('type', 'password');

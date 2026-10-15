@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('comments workspace navigation, filters, pagination and source inspection', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/cockpit');
   const nav = page.locator('nav');
   const buttons = await nav.getByRole('button').allTextContents();
   expect(buttons).toEqual(expect.arrayContaining(['Reviews & Comments', 'Document intelligence', '3D model', 'Decisions & audit']));
