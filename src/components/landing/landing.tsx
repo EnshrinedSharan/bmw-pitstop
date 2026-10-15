@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Box, FileSearch, Gavel, Github, Layers, Linkedin, MessageSquareText, Presentation, TrendingUp } from 'lucide-react';
-import { EVENT_NAME, TEAM, TEAM_NAME, type TeamMember } from './team';
+import { EVENT_NAME, TEAM, TEAM_NAME, TEAM_PHOTO, type TeamMember } from './team';
 import './landing.css';
 
 const FEATURES = [
@@ -38,9 +38,11 @@ function MemberCard({ member }: { member: TeamMember }) {
       <h3>{member.name}</h3>
       <p className="lp-role">{member.role}</p>
       {member.bio && <p className="lp-bio">{member.bio}</p>}
-      <ul className="lp-tags" aria-label={`${member.name}'s tech stack`}>
-        {member.stack.map(s => <li key={s}>{s}</li>)}
-      </ul>
+      {member.stack.length > 0 && (
+        <ul className="lp-tags" aria-label={`${member.name}'s tech stack`}>
+          {member.stack.map(s => <li key={s}>{s}</li>)}
+        </ul>
+      )}
       {(member.linkedin || member.github) && (
         <div className="lp-links">
           {member.linkedin && <a href={member.linkedin} target="_blank" rel="noreferrer" aria-label={`${member.name} on LinkedIn`}><Linkedin size={16} /></a>}
@@ -133,6 +135,10 @@ export function Landing() {
         <section id="team" className="lp-section">
           <p className="lp-eyebrow">{TEAM_NAME}</p>
           <h2>The people behind Pitstop</h2>
+          <figure className="lp-team-photo">
+            <img src={TEAM_PHOTO} alt={`${TEAM_NAME} at the ${EVENT_NAME}`} width={1280} height={690} />
+            <figcaption>{TEAM_NAME} at the {EVENT_NAME}, hosted with TUM.ai.</figcaption>
+          </figure>
           <div className="lp-grid lp-grid-team">
             {TEAM.map(m => <MemberCard key={m.name} member={m} />)}
           </div>

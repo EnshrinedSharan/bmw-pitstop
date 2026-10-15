@@ -31,7 +31,7 @@
 .lp-grid { display: grid; gap: 16px; }
 .lp-grid-3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .lp-grid-4 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.lp-grid-team { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
+.lp-grid-team { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
 
 .lp-card { padding: 26px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .lp-card h3 { font-size: 17px; margin: 14px 0 8px; }
@@ -47,6 +47,9 @@
 .lp-steps h3 { font-size: 20px; margin: 10px 0 8px; }
 .lp-steps p { font-size: 14px; line-height: 1.6; color: var(--muted); }
 
+.lp-team-photo { margin: 0 0 32px; }
+.lp-team-photo img { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.lp-team-photo figcaption { margin-top: 10px; font-size: 13px; color: var(--subtle); }
 .lp-member { padding: 28px 24px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; }
 .lp-member .lp-tags { justify-content: center; }
 .lp-photo { width: 120px; height: 120px; margin-bottom: 18px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--surface-soft); border: 2px solid var(--accent-border); }

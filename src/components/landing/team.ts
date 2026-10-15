@@ -11,11 +11,14 @@ export type TeamMember = {
 };
 
 export const TEAM_NAME = 'Team Pitstop';
-export const EVENT_NAME = 'EHL Hackathon 2026';
+export const EVENT_NAME = 'European Hackathon League';
+export const TEAM_PHOTO = '/team/team-photo.jpg';
 
+// Ordered left to right as in the group photo.
 export const TEAM: TeamMember[] = [
-  { name: 'Team member 1', role: 'Product Manager', stack: ['Product discovery', 'Customer research'], bio: 'Placeholder. Replace with the real profile.' },
-  { name: 'Team member 2', role: 'Frontend', stack: ['Next.js', 'React', 'Three.js'], bio: 'Placeholder. Replace with the real profile.' },
-  { name: 'Team member 3', role: 'Backend', stack: ['Python', 'FastAPI', 'SQLite'], bio: 'Placeholder. Replace with the real profile.' },
-  { name: 'Team member 4', role: 'Data & AI', stack: ['OpenAI', 'RAG', 'Reddit pipeline'], bio: 'Placeholder. Replace with the real profile.' },
+  { name: 'Team member 1', role: 'Role to be added', stack: [], photo: '/team/member-1.jpg' },
+  { name: 'Team member 2', role: 'Role to be added', stack: [], photo: '/team/member-2.jpg' },
+  { name: 'Team member 3', role: 'Role to be added', stack: [], photo: '/team/member-3.jpg' },
+  { name: 'Team member 4', role: 'Role to be added', stack: [], photo: '/team/member-4.jpg' },
+  { name: 'Team member 5', role: 'Role to be added', stack: [], photo: '/team/member-5.jpg' },
 ];
