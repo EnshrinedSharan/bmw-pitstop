@@ -1,5 +1,9 @@
 # BMW Product Manager Cockpit
 
+**Live web app:** [bmw-pitstop.vercel.app](https://bmw-pitstop.vercel.app)
+
+The API runs on Render's free tier, so the first request after a quiet period can take up to a minute while it wakes up.
+
 ## Application Trial — combined local website
 
 ## Portable Windows package
