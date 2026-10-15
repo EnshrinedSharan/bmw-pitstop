@@ -1,0 +1,27 @@
+# Render Blueprint for the FastAPI backend. The Next.js frontend is deployed separately on Vercel.
+# The database is seeded from the committed G60 source documents during the build, so the
+# service needs no persistent disk. Decisions made on the hosted site reset on each deploy or restart.
+services:
+  - type: web
+    name: bmw-pitstop-api
+    runtime: python
+    plan: free
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python -m backend.cli migrate &&
+      python -m backend.cli import-files G60_OptionList.PDF BMW_G60_Scopes_and_Data.pdf "261010_BMW_Product_Management_Key_Note(1).pptx" G60_feedback_hackathon.xlsx
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      # Comma-separated host names the API accepts, e.g. bmw-pitstop-api.onrender.com
+      - key: BMWPM_ALLOWED_HOSTS
+        sync: false
+      # Comma-separated site origins allowed to make changes, e.g. https://bmw-pitstop.vercel.app
+      - key: BMWPM_ALLOWED_ORIGINS
+        sync: false
+      # Optional. Leave unset on a public site so visitors cannot spend your OpenAI credits;
+      # the app falls back to its supplied replays without it.
+      - key: OPENAI_API_KEY
+        sync: false

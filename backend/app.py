@@ -39,8 +39,11 @@ ORIGINS=['http://127.0.0.1:3001','http://localhost:3001','http://127.0.0.1:8001'
 web_port=int(os.getenv('BMWPM_WEB_PORT','3001'))
 if not 1<=web_port<=65535:raise ValueError('BMWPM_WEB_PORT must be a valid local port.')
 ORIGINS.extend([f'http://127.0.0.1:{web_port}',f'http://localhost:{web_port}'])
+# Hosted deployments add their public site and API host names; local runs leave these unset.
+ORIGINS.extend(o.strip().rstrip('/') for o in os.getenv('BMWPM_ALLOWED_ORIGINS','').split(',') if o.strip())
+ALLOWED_HOSTS=['127.0.0.1','localhost','testserver']+[h.strip() for h in os.getenv('BMWPM_ALLOWED_HOSTS','').split(',') if h.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=ORIGINS,allow_methods=['GET','POST'],allow_headers=['Content-Type'])
-app.add_middleware(TrustedHostMiddleware,allowed_hosts=['127.0.0.1','localhost','testserver'])
+app.add_middleware(TrustedHostMiddleware,allowed_hosts=ALLOWED_HOSTS)
 
 @app.middleware('http')
 async def local_mutations(request:Request,call_next):
