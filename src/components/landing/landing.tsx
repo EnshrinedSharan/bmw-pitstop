@@ -36,7 +36,7 @@ function MemberCard({ member }: { member: TeamMember }) {
         {member.photo ? <img src={member.photo} alt={member.name} loading="lazy" /> : <span aria-hidden="true">{initials(member.name)}</span>}
       </div>
       <h3>{member.name}</h3>
-      <p className="lp-role">{member.role}</p>
+      {member.role && <p className="lp-role">{member.role}</p>}
       {member.bio && <p className="lp-bio">{member.bio}</p>}
       {member.stack.length > 0 && (
         <ul className="lp-tags" aria-label={`${member.name}'s tech stack`}>

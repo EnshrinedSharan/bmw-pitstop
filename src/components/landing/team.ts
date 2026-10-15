@@ -2,7 +2,7 @@
 // Leave `photo` empty to show the member's initials instead.
 export type TeamMember = {
   name: string;
-  role: string;
+  role?: string;
   stack: string[];
   bio?: string;
   photo?: string;
@@ -16,9 +16,9 @@ export const TEAM_PHOTO = '/team/team-photo.jpg';
 
 // Ordered left to right as in the group photo.
 export const TEAM: TeamMember[] = [
-  { name: 'Team member 1', role: 'Role to be added', stack: [], photo: '/team/member-1.jpg' },
-  { name: 'Team member 2', role: 'Role to be added', stack: [], photo: '/team/member-2.jpg' },
-  { name: 'Team member 3', role: 'Role to be added', stack: [], photo: '/team/member-3.jpg' },
-  { name: 'Team member 4', role: 'Role to be added', stack: [], photo: '/team/member-4.jpg' },
-  { name: 'Team member 5', role: 'Role to be added', stack: [], photo: '/team/member-5.jpg' },
+  { name: 'Team member 1', stack: [], photo: '/team/member-1.jpg' },
+  { name: 'Team member 2', stack: [], photo: '/team/member-2.jpg' },
+  { name: 'Team member 3', stack: [], photo: '/team/member-3.jpg' },
+  { name: 'Team member 4', stack: [], photo: '/team/member-4.jpg' },
+  { name: 'Team member 5', stack: [], photo: '/team/member-5.jpg' },
 ];
